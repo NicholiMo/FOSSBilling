@@ -2562,16 +2562,16 @@
         },
         {
             "name": "nette/schema",
-            "version": "v1.3.4",
+            "version": "v1.3.5",
             "source": {
                 "type": "git",
                 "url": "https://github.com/nette/schema.git",
-                "reference": "086497a2f34b82fede9b5a41cc8e131d087cd8f7"
+                "reference": "f0ab1a3cda782dbc5da270d28545236aa80c4002"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/nette/schema/zipball/086497a2f34b82fede9b5a41cc8e131d087cd8f7",
-                "reference": "086497a2f34b82fede9b5a41cc8e131d087cd8f7",
+                "url": "https://api.github.com/repos/nette/schema/zipball/f0ab1a3cda782dbc5da270d28545236aa80c4002",
+                "reference": "f0ab1a3cda782dbc5da270d28545236aa80c4002",
                 "shasum": ""
             },
             "require": {
@@ -2579,8 +2579,10 @@
                 "php": "8.1 - 8.5"
             },
             "require-dev": {
+                "nette/phpstan-rules": "^1.0",
                 "nette/tester": "^2.6",
-                "phpstan/phpstan": "^2.0@stable",
+                "phpstan/extension-installer": "^1.4@stable",
+                "phpstan/phpstan": "^2.1.39@stable",
                 "tracy/tracy": "^2.8"
             },
             "type": "library",
@@ -2621,9 +2623,9 @@
             ],
             "support": {
                 "issues": "https://github.com/nette/schema/issues",
-                "source": "https://github.com/nette/schema/tree/v1.3.4"
+                "source": "https://github.com/nette/schema/tree/v1.3.5"
             },
-            "time": "2026-02-08T02:54:00+00:00"
+            "time": "2026-02-23T03:47:12+00:00"
         },
         {
             "name": "nette/utils",
@@ -3529,33 +3531,35 @@
         },
         {
             "name": "sabberworm/php-css-parser",
-            "version": "v9.1.0",
+            "version": "v9.2.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/MyIntervals/PHP-CSS-Parser.git",
-                "reference": "1b363fdbdc6dd0ca0f4bf98d3a4d7f388133f1fb"
+                "reference": "59373045e11ad47b5c18fc615feee0219e42f6d3"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/MyIntervals/PHP-CSS-Parser/zipball/1b363fdbdc6dd0ca0f4bf98d3a4d7f388133f1fb",
-                "reference": "1b363fdbdc6dd0ca0f4bf98d3a4d7f388133f1fb",
+                "url": "https://api.github.com/repos/MyIntervals/PHP-CSS-Parser/zipball/59373045e11ad47b5c18fc615feee0219e42f6d3",
+                "reference": "59373045e11ad47b5c18fc615feee0219e42f6d3",
                 "shasum": ""
             },
             "require": {
                 "ext-iconv": "*",
                 "php": "^7.2.0 || ~8.0.0 || ~8.1.0 || ~8.2.0 || ~8.3.0 || ~8.4.0 || ~8.5.0",
-                "thecodingmachine/safe": "^1.3 || ^2.5 || ^3.3"
+                "thecodingmachine/safe": "^1.3 || ^2.5 || ^3.4"
             },
             "require-dev": {
                 "php-parallel-lint/php-parallel-lint": "1.4.0",
                 "phpstan/extension-installer": "1.4.3",
-                "phpstan/phpstan": "1.12.28 || 2.1.25",
-                "phpstan/phpstan-phpunit": "1.4.2 || 2.0.7",
-                "phpstan/phpstan-strict-rules": "1.6.2 || 2.0.6",
-                "phpunit/phpunit": "8.5.46",
+                "phpstan/phpstan": "1.12.32 || 2.1.32",
+                "phpstan/phpstan-phpunit": "1.4.2 || 2.0.8",
+                "phpstan/phpstan-strict-rules": "1.6.2 || 2.0.7",
+                "phpunit/phpunit": "8.5.52",
                 "rawr/phpunit-data-provider": "3.3.1",
-                "rector/rector": "1.2.10 || 2.1.7",
-                "rector/type-perfect": "1.0.0 || 2.1.0"
+                "rector/rector": "1.2.10 || 2.2.8",
+                "rector/type-perfect": "1.0.0 || 2.1.0",
+                "squizlabs/php_codesniffer": "4.0.1",
+                "thecodingmachine/phpstan-safe-rule": "1.2.0 || 1.4.1"
             },
             "suggest": {
                 "ext-mbstring": "for parsing UTF-8 CSS"
@@ -3563,10 +3567,14 @@
             "type": "library",
             "extra": {
                 "branch-alias": {
-                    "dev-main": "9.2.x-dev"
+                    "dev-main": "9.3.x-dev"
                 }
             },
             "autoload": {
+                "files": [
+                    "src/Rule/Rule.php",
+                    "src/RuleSet/RuleContainer.php"
+                ],
                 "psr-4": {
                     "Sabberworm\\CSS\\": "src/"
                 }
@@ -3597,9 +3605,9 @@
             ],
             "support": {
                 "issues": "https://github.com/MyIntervals/PHP-CSS-Parser/issues",
-                "source": "https://github.com/MyIntervals/PHP-CSS-Parser/tree/v9.1.0"
+                "source": "https://github.com/MyIntervals/PHP-CSS-Parser/tree/v9.2.0"
             },
-            "time": "2025-09-14T07:37:21+00:00"
+            "time": "2026-02-21T17:12:03+00:00"
         },
         {
             "name": "sentry/sentry",
