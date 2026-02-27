@@ -64,7 +64,7 @@ CREATE TABLE `activity_client_history` (
   `created_at` datetime DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `client_id_idx` (`client_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -84,7 +84,7 @@ CREATE TABLE `activity_system` (
   PRIMARY KEY (`id`),
   KEY `admin_id_idx` (`admin_id`),
   KEY `client_id_idx` (`client_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -145,7 +145,7 @@ CREATE TABLE `admin_password_reset` (
     `updated_at` datetime DEFAULT NULL,
     PRIMARY KEY (`id`),
     KEY `admin_id_idx` (`admin_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1074,7 +1074,7 @@ CREATE TABLE `service_hosting_server` (
   `username` text,
   `password` text,
   `accesshash` text,
-  `password_length` tinyint DEFAULT NULL,
+  `password_length` tinyint(4) DEFAULT NULL,
   `port` varchar(20) DEFAULT NULL,
   `config` text,
   `secure` tinyint(1) DEFAULT NULL,
