@@ -25,7 +25,7 @@ coloris({
  */
 function getClipboardTargetText(button) {
   const targetSelector = button.dataset.clipboardTarget;
-  if (typeof targetSelector !== 'string') return null;
+  if (!targetSelector) return null;
 
   // Only allow simple ID selectors such as "#element-id"
   if (!/^#[A-Za-z0-9_-]+$/.test(targetSelector)) {
@@ -105,6 +105,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.js-theme-toggler').forEach(element => {
     element.addEventListener('click', event => {
       event.preventDefault();
+      // Intentionally use getAttribute('href') to read the raw attribute value
+      // instead of element.href, since we only parse a simple theme token here.
       const href = element.getAttribute('href') || '';
       let theme = null;
 
