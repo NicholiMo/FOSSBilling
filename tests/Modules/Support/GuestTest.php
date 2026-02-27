@@ -29,7 +29,7 @@ final class GuestTest extends TestCase
         // Disable public tickets
         Request::makeRequest('admin/extension/config_save', ['ext' => 'mod_support', 'disable_public_tickets' => true]);
 
-        // Now ensure
+        // Now ensure that guest ticket creation fails when public tickets are disabled
         $result = Request::makeRequest('guest/support/ticket_create', [
             'name' => 'Name',
             'email' => 'email2@example.com',
@@ -42,5 +42,65 @@ final class GuestTest extends TestCase
 
         // Set it back
         Request::makeRequest('admin/extension/config_save', ['ext' => 'mod_support', 'disable_public_tickets' => false]);
+    }
+
+    public function testTicketCreateForGuestMissingName(): void
+    {
+        $result = Request::makeRequest('guest/support/ticket_create', [
+            // 'name' is intentionally omitted
+            'email' => 'email@example.com',
+            'subject' => 'Subject',
+            'message' => 'message',
+        ]);
+
+        $this->assertFalse($result->wasSuccessful());
+    }
+
+    public function testTicketCreateForGuestMissingEmail(): void
+    {
+        $result = Request::makeRequest('guest/support/ticket_create', [
+            'name' => 'Name',
+            // 'email' is intentionally omitted
+            'subject' => 'Subject',
+            'message' => 'message',
+        ]);
+
+        $this->assertFalse($result->wasSuccessful());
+    }
+
+    public function testTicketCreateForGuestInvalidEmail(): void
+    {
+        $result = Request::makeRequest('guest/support/ticket_create', [
+            'name' => 'Name',
+            'email' => 'not-an-email',
+            'subject' => 'Subject',
+            'message' => 'message',
+        ]);
+
+        $this->assertFalse($result->wasSuccessful());
+    }
+
+    public function testTicketCreateForGuestEmptySubject(): void
+    {
+        $result = Request::makeRequest('guest/support/ticket_create', [
+            'name' => 'Name',
+            'email' => 'email@example.com',
+            'subject' => '',
+            'message' => 'message',
+        ]);
+
+        $this->assertFalse($result->wasSuccessful());
+    }
+
+    public function testTicketCreateForGuestEmptyMessage(): void
+    {
+        $result = Request::makeRequest('guest/support/ticket_create', [
+            'name' => 'Name',
+            'email' => 'email@example.com',
+            'subject' => 'Subject',
+            'message' => '',
+        ]);
+
+        $this->assertFalse($result->wasSuccessful());
     }
 }
