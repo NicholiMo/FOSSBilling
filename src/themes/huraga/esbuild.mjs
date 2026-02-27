@@ -45,7 +45,11 @@ async function removeDirContents(dir) {
       const entryPath = join(dir, entry.name);
       await rm(entryPath, { recursive: true, force: true });
     }
-  } catch {}
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      throw error;
+    }
+  }
 }
 
 async function copyAssets(srcDir, destDir, options = {}) {
@@ -77,7 +81,11 @@ async function postprocessCssFile(cssPath, isProduction) {
   if (!isProduction) {
     try {
       prevMap = await readFile(mapPath, 'utf8');
-    } catch {}
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        throw error;
+      }
+    }
   }
 
   const result = await postcss([autoprefixer]).process(css, {
@@ -186,7 +194,9 @@ async function build() {
       minify: isProduction,
       sourcemap: !isProduction,
       logLevel: 'info',
-      define: { 'process.env.NODE_ENV': isProduction ? '"production"' : '"development"' }
+      define: { 'process.env.NODE_ENV': isProduction ? '"production"' : '"development"' },
+      treeShaking: true,
+      legalComments: 'none'
     });
 
     await postprocessCssFile(join(cssDir, 'huraga.css'), isProduction);
@@ -307,9 +317,7 @@ async function watch() {
     markdownCssContext.watch()
   ]);
 
-  themeCssContext.watch().then(() => {
-    postprocessCssFile(join(cssDir, 'huraga.css'), isProduction);
-  });
+  await postprocessCssFile(join(cssDir, 'huraga.css'), isProduction);
 
   console.log('✓ Watching for changes ...\n');
   process.stdin.resume();
