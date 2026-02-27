@@ -1,8 +1,8 @@
--- MySQL dump 10.13  Distrib 5.5.38, for debian-linux-gnu (x86_64)
+-- MySQL dump 10.13  Distrib 8.0, for Linux (x86_64)
 --
 -- Host: localhost    Database: boxbilling
 -- ------------------------------------------------------
--- Server version	5.5.38-0ubuntu0.14.04.1
+-- Server version	8.0.x
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -28,7 +28,7 @@ CREATE TABLE `activity_admin_history` (
   `created_at` datetime DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `admin_id_idx` (`admin_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -48,7 +48,7 @@ CREATE TABLE `activity_client_email` (
   `created_at` datetime DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `client_id_idx` (`client_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -234,7 +234,7 @@ CREATE TABLE `client` (
   `state` varchar(100) DEFAULT NULL,
   `postcode` varchar(100) DEFAULT NULL,
   `country` varchar(100) DEFAULT NULL,
-  `document_type` ENUM('passport') DEFAULT NULL,
+  `document_type` varchar(50) DEFAULT NULL,
   `document_nr` varchar(20) DEFAULT NULL,
   `notes` text,
   `currency` varchar(10) DEFAULT NULL,
@@ -723,7 +723,7 @@ CREATE TABLE `post` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `admin_id` bigint(20) DEFAULT NULL,
   `title` varchar(255) DEFAULT NULL,
-  `description` text DEFAULT NULL,
+  `description` text,
   `content` text,
   `slug` varchar(255) DEFAULT NULL,
   `status` varchar(30) DEFAULT 'draft' COMMENT 'active, draft',
