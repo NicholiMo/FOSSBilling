@@ -3,7 +3,7 @@ import { initAvatars } from './js/avatar.js';
 import { coloris, init } from '@melloware/coloris';
 import * as tabler from '@tabler/core/js/tabler.js';
 import './js/tomselect';
-import './js/datepicker'
+import './js/datepicker';
 import ApexCharts from 'apexcharts';
 import './js/ui/theme_settings';
 import './js/fossbilling';
@@ -35,7 +35,11 @@ function getClipboardTargetText(button) {
   const targetElement = document.querySelector(targetSelector);
   if (!targetElement) return null;
 
-  return targetElement.value || targetElement.textContent;
+  if ('value' in targetElement) {
+    return targetElement.value;
+  }
+
+  return targetElement.textContent;
 }
 
 /**
@@ -126,9 +130,9 @@ document.addEventListener('DOMContentLoaded', () => {
    */
   const tooltipTriggerList = Array.from(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
   tooltipTriggerList.forEach(function (tooltipTriggerEl) {
-    return new bootstrap.Tooltip(tooltipTriggerEl, {
+    new bootstrap.Tooltip(tooltipTriggerEl, {
       'trigger': 'hover'
-    })
+    });
   });
 
 
