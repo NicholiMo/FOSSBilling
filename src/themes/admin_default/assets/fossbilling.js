@@ -28,7 +28,7 @@ function getClipboardTargetText(button) {
   if (typeof targetSelector !== 'string') return null;
 
   // Only allow simple ID selectors such as "#element-id"
-  if (!/^#[A-Za-z0-9_\-.]+$/.test(targetSelector)) {
+  if (!/^#[A-Za-z0-9_-]+$/.test(targetSelector)) {
     return null;
   }
 
@@ -64,6 +64,7 @@ async function copyTextToClipboard(text) {
     textarea.style.opacity = '0';
     document.body.appendChild(textarea);
     textarea.select();
+    // Intentional: use deprecated execCommand as a legacy clipboard fallback for older browsers.
     return document.execCommand('copy');
   } catch (err) {
     return false;
