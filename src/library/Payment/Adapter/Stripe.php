@@ -536,13 +536,6 @@ class Payment_Adapter_Stripe implements FOSSBilling\InjectionAwareInterface
                 $tx->amount = $charge->amount / 100;
                 $tx->currency = $charge->currency;
                 $gatewayStatus = $charge->status;
-            } elseif (
-                (!isset($data['get']['payment_intent']) || $data['get']['payment_intent'] === '')
-                && $this->isWebhookPrePopulatedTransaction($tx)
-            ) {
-                // Subscription-originated transactions may already be populated from webhook data.
-                // In this branch, avoid re-fetching a PaymentIntent and trust stored transaction fields.
-                $gatewayStatus = (string) ($tx->txn_status ?: 'pending');
             } else {
                 throw new Payment_Exception('Stripe callback did not include a payment_intent or a supported webhook payload.');
             }
@@ -554,24 +547,22 @@ class Payment_Adapter_Stripe implements FOSSBilling\InjectionAwareInterface
                 'rel_id' => $tx->id,
             ];
 
-            // Only process account crediting/invoice payment once after Stripe confirms success.
+            // Only pay the invoice if the transaction has 'succeeded' on Stripe's end & the associated FOSSBilling transaction hasn't been processed.
             if ($gatewayStatus == 'succeeded' && $tx->status !== 'processed') {
-                $invoice = $this->tryResolveInvoiceForTransaction($tx, $data);
-                $clientId = $this->resolveClientIdForSuccessfulPayment($tx, $invoice, $stripeInvoice);
-
+                $invoice = $this->resolveInvoiceForTransaction($tx, $data);
                 // Instance the services we need
                 $clientService = $this->di['mod_service']('client');
                 $invoiceService = $this->di['mod_service']('Invoice');
 
                 // Update the account funds
-                $client = $this->di['db']->getExistingModelById('Client', $clientId);
+                $client = $this->di['db']->getExistingModelById('Client', $invoice->client_id);
                 $clientService->addFunds($client, $bd['amount'], $bd['description'], $bd);
 
-                // Now pay invoice with credits when available; otherwise batch-pay outstanding invoices.
-                // Skip direct payment for deposit invoices - funds were already added above.
-                if ($invoice instanceof Model_Invoice && !$invoiceService->isInvoiceTypeDeposit($invoice)) {
+                // Now pay the invoice / batch pay if there's no invoice associated with the transaction
+                // Skip payment for deposit invoices - funds were already added above
+                if ($tx->invoice_id && !$invoiceService->isInvoiceTypeDeposit($invoice)) {
                     $invoiceService->payInvoiceWithCredits($invoice);
-                } else {
+                } elseif (!$tx->invoice_id) {
                     $invoiceService->doBatchPayWithCredits(['client_id' => $client->id]);
                 }
             }
@@ -616,62 +607,6 @@ class Payment_Adapter_Stripe implements FOSSBilling\InjectionAwareInterface
         }
 
         throw new Payment_Exception('Stripe transaction is not associated with any FOSSBilling invoice.');
-    }
-
-    /**
-     * Attempts to resolve the invoice for the transaction and returns null when none is associated.
-     */
-    private function tryResolveInvoiceForTransaction(Model_Transaction $tx, array $data): ?Model_Invoice
-    {
-        if ($tx->invoice_id || (isset($data['get']['invoice_id']) && !empty($data['get']['invoice_id']))) {
-            return $this->resolveInvoiceForTransaction($tx, $data);
-        }
-
-        return null;
-    }
-
-    /**
-     * Resolves client ID for successful payment processing when invoice relation may be missing.
-     *
-     * @throws Payment_Exception
-     */
-    private function resolveClientIdForSuccessfulPayment(Model_Transaction $tx, ?Model_Invoice $invoice = null, ?array $stripeInvoice = null): int
-    {
-        if ($invoice instanceof Model_Invoice) {
-            return (int) $invoice->client_id;
-        }
-
-        if (is_array($stripeInvoice)) {
-            $metadata = $this->extractStripeSubscriptionMetadata($stripeInvoice);
-            $clientId = isset($metadata['fb_client_id']) ? (int) $metadata['fb_client_id'] : 0;
-            if ($clientId > 0) {
-                return $clientId;
-            }
-        }
-
-        if (is_string($tx->s_id) && $tx->s_id !== '') {
-            $subscription = $this->di['db']->findOne('Subscription', 'sid = ?', [$tx->s_id]);
-            if ($subscription !== null && isset($subscription->client_id) && (int) $subscription->client_id > 0) {
-                return (int) $subscription->client_id;
-            }
-        }
-
-        throw new Payment_Exception('Stripe transaction is not associated with any FOSSBilling client.');
-    }
-
-    /**
-     * Returns true when a transaction was already populated from Stripe webhook data.
-     */
-    private function isWebhookPrePopulatedTransaction(Model_Transaction $tx): bool
-    {
-        $hasStatus = is_string($tx->txn_status) && $tx->txn_status !== '';
-        $hasAmount = is_numeric($tx->amount);
-        $hasCurrency = is_string($tx->currency) && $tx->currency !== '';
-        $hasStripeContext = (is_string($tx->s_id) && $tx->s_id !== '')
-            || $tx->type === 'subscription_payment'
-            || $tx->type === 'subscription_status_update';
-
-        return $hasStatus && $hasAmount && $hasCurrency && $hasStripeContext;
     }
 
     /**
@@ -820,12 +755,12 @@ class Payment_Adapter_Stripe implements FOSSBilling\InjectionAwareInterface
         $tx->currency = strtoupper((string) ($stripeInvoice['currency'] ?? $tx->currency));
         $tx->type = 'subscription_payment';
 
-        $subscriptionId = $this->sanitizeStripeIdentifier($stripeInvoice['subscription'] ?? null);
+        $subscriptionId = (string) ($stripeInvoice['subscription'] ?? '');
         if ($subscriptionId !== '') {
             $tx->s_id = $subscriptionId;
         }
 
-        $customerId = $this->sanitizeStripeIdentifier($stripeInvoice['customer'] ?? null);
+        $customerId = (string) ($stripeInvoice['customer'] ?? '');
         $tx->note = trim(sprintf(
             'Stripe subscription webhook payment%s%s',
             $subscriptionId !== '' ? ' for subscription ' . $subscriptionId : '',
@@ -847,9 +782,8 @@ class Payment_Adapter_Stripe implements FOSSBilling\InjectionAwareInterface
         ];
 
         foreach ($candidates as $candidate) {
-            $id = $this->sanitizeStripeIdentifier($candidate);
-            if ($id !== '') {
-                return $id;
+            if (is_string($candidate) && $candidate !== '') {
+                return $candidate;
             }
         }
 
@@ -861,7 +795,7 @@ class Payment_Adapter_Stripe implements FOSSBilling\InjectionAwareInterface
      */
     private function applyStripeSubscriptionWebhookToTransaction(Model_Transaction $tx, array $stripeSubscription, string $eventType): void
     {
-        $subscriptionId = $this->sanitizeStripeIdentifier($stripeSubscription['id'] ?? null);
+        $subscriptionId = (string) ($stripeSubscription['id'] ?? '');
         if ($subscriptionId !== '') {
             $tx->s_id = $subscriptionId;
             $tx->txn_id = $subscriptionId;
@@ -883,7 +817,7 @@ class Payment_Adapter_Stripe implements FOSSBilling\InjectionAwareInterface
      */
     private function updateFossBillingSubscriptionStatusFromStripeWebhook($api_admin, array $stripeSubscription, string $eventType): void
     {
-        $subscriptionId = $this->sanitizeStripeIdentifier($stripeSubscription['id'] ?? null);
+        $subscriptionId = (string) ($stripeSubscription['id'] ?? '');
         if ($subscriptionId === '') {
             return;
         }
@@ -921,12 +855,12 @@ class Payment_Adapter_Stripe implements FOSSBilling\InjectionAwareInterface
      */
     private function recordSoftSubscriptionPaymentFailure(array $stripeInvoice): void
     {
-        $subscriptionId = $this->sanitizeStripeIdentifier($stripeInvoice['subscription'] ?? null);
-        $invoiceId = $this->sanitizeStripeIdentifier($stripeInvoice['id'] ?? null);
+        $subscriptionId = (string) ($stripeInvoice['subscription'] ?? 'unknown');
+        $invoiceId = (string) ($stripeInvoice['id'] ?? 'unknown');
         $this->di['logger']->warning(
             'Stripe subscription payment failed for subscription %s (invoice %s).',
-            $subscriptionId !== '' ? $subscriptionId : 'unknown',
-            $invoiceId !== '' ? $invoiceId : 'unknown'
+            $subscriptionId,
+            $invoiceId
         );
     }
 
@@ -936,7 +870,7 @@ class Payment_Adapter_Stripe implements FOSSBilling\InjectionAwareInterface
      */
     private function createFossBillingSubscriptionFromStripeInvoice($api_admin, Model_Transaction $tx, array $stripeInvoice, Model_Invoice $invoice, int $gatewayId): void
     {
-        $subscriptionId = $this->sanitizeStripeIdentifier($stripeInvoice['subscription'] ?? null);
+        $subscriptionId = (string) ($stripeInvoice['subscription'] ?? '');
         if ($subscriptionId === '') {
             return;
         }
@@ -985,24 +919,6 @@ class Payment_Adapter_Stripe implements FOSSBilling\InjectionAwareInterface
     private function isFirstStripeSubscriptionInvoice(array $stripeInvoice): bool
     {
         return ($stripeInvoice['billing_reason'] ?? null) === 'subscription_create';
-    }
-
-    /**
-     * Returns a normalized Stripe identifier (letters, numbers, underscore) or empty string.
-     * Used to harden webhook-derived IDs before DB/API lookups and log formatting.
-     */
-    private function sanitizeStripeIdentifier(mixed $value): string
-    {
-        if (!is_scalar($value)) {
-            return '';
-        }
-
-        $id = trim((string) $value);
-        if ($id === '') {
-            return '';
-        }
-
-        return preg_match('/^[A-Za-z0-9_]+$/', $id) === 1 ? $id : '';
     }
 
     /**
