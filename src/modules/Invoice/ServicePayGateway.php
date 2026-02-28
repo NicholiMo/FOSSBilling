@@ -268,6 +268,7 @@ class ServicePayGateway implements InjectionAwareInterface
     {
         $config = json_decode($pg->config ?? '', true) ?? [];
         $defaults = [];
+        $defaults['gateway_id'] = $pg->id;
         $defaults['auto_redirect'] = false;
         $defaults['test_mode'] = $pg->test_mode;
         $defaults['return_url'] = $this->getReturnUrl($pg, $model);
