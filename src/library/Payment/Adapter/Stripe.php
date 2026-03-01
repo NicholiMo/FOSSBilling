@@ -128,17 +128,33 @@ class Payment_Adapter_Stripe implements FOSSBilling\InjectionAwareInterface
         $customer = $this->getOrCreateCustomerForInvoice($invoice);
         $subscription = $this->createStripeSubscriptionForInvoice($invoice, $customer, $periodCode);
 
-        $latestInvoice = $subscription->latest_invoice;
-        if (!is_object($latestInvoice) || !isset($latestInvoice->payment_intent)) {
-            throw new Payment_Exception('Stripe subscription did not return a payment intent for the initial invoice.');
-        }
-        $paymentIntent = $latestInvoice->payment_intent;
-        $clientSecret = is_object($paymentIntent) ? $paymentIntent->client_secret : null;
+        $clientSecret = $this->getSubscriptionClientSecret($subscription);
         if (empty($clientSecret)) {
-            throw new Payment_Exception('Stripe subscription payment intent has no client secret.');
+            throw new Payment_Exception('Stripe subscription did not return a client secret for the initial invoice. Ensure the subscription requires confirmation and check latest_invoice.payment_intent or latest_invoice.confirmation_secret.');
         }
 
         return $this->generateSubscriptionPaymentForm($invoice, $clientSecret);
+    }
+
+
+    private function getSubscriptionClientSecret(\Stripe\Subscription $subscription): ?string
+    {
+        $latestInvoice = $subscription->latest_invoice ?? null;
+        if (!is_object($latestInvoice)) {
+            return null;
+        }
+
+        $paymentIntent = $latestInvoice->payment_intent ?? null;
+        if (is_object($paymentIntent) && !empty($paymentIntent->client_secret)) {
+            return (string) $paymentIntent->client_secret;
+        }
+
+        $confirmationSecret = $latestInvoice->confirmation_secret ?? null;
+        if (is_object($confirmationSecret) && !empty($confirmationSecret->client_secret)) {
+            return (string) $confirmationSecret->client_secret;
+        }
+
+        return null;
     }
 
     /**
@@ -276,7 +292,7 @@ class Payment_Adapter_Stripe implements FOSSBilling\InjectionAwareInterface
             'customer' => $customer->id,
             'items' => [['price' => $price->id]],
             'payment_behavior' => 'default_incomplete',
-            'expand' => ['latest_invoice.payment_intent'],
+            'expand' => ['latest_invoice.payment_intent', 'latest_invoice.confirmation_secret'],
             'metadata' => $metadata,
         ]);
     }
