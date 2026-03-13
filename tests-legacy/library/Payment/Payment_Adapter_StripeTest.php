@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Stripe\Exception\ApiErrorException;
+use Stripe\Exception\InvalidRequestException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 
@@ -113,6 +115,80 @@ final class Payment_Adapter_StripeTest extends BBTestCase
         $this->assertSame('tx_safe_123', $fallbackId);
     }
 
+    public function testCancelSubscriptionCallsStripeCancelWithSid(): void
+    {
+        $adapter = $this->createAdapter();
+        [$subscriptionService, $logger] = $this->mockAdapterDiForCancellation($adapter, 'Stripe');
+        $subscriptionService->expects($this->once())
+            ->method('cancel')
+            ->with('sub_test_123');
+        $logger->expects($this->never())->method('error');
+
+        $model = new Model_Subscription();
+        $model->loadBean(new DummyBean());
+        $model->sid = 'sub_test_123';
+        $model->pay_gateway_id = 1;
+
+        $adapter->cancelSubscription($model);
+    }
+
+    public function testCancelSubscriptionRejectsEmptySid(): void
+    {
+        $adapter = $this->createAdapter();
+        [$subscriptionService] = $this->mockAdapterDiForCancellation($adapter, 'Stripe');
+        $subscriptionService->expects($this->never())->method('cancel');
+
+        $model = new Model_Subscription();
+        $model->loadBean(new DummyBean());
+        $model->sid = '';
+        $model->pay_gateway_id = 1;
+
+        $this->expectException(Payment_Exception::class);
+        $this->expectExceptionMessage('requires a non-empty subscription SID');
+
+        $adapter->cancelSubscription($model);
+    }
+
+    public function testCancelSubscriptionTreatsAlreadyCanceledAsSuccess(): void
+    {
+        $adapter = $this->createAdapter();
+        [$subscriptionService, $logger] = $this->mockAdapterDiForCancellation($adapter, 'Stripe');
+        $subscriptionService->expects($this->once())
+            ->method('cancel')
+            ->with('sub_test_123')
+            ->willThrowException(new InvalidRequestException('Subscription is already canceled.'));
+        $logger->expects($this->once())->method('info');
+        $logger->expects($this->never())->method('error');
+
+        $model = new Model_Subscription();
+        $model->loadBean(new DummyBean());
+        $model->sid = 'sub_test_123';
+        $model->pay_gateway_id = 1;
+
+        $adapter->cancelSubscription($model);
+    }
+
+    public function testCancelSubscriptionPropagatesApiErrors(): void
+    {
+        $adapter = $this->createAdapter();
+        [$subscriptionService, $logger] = $this->mockAdapterDiForCancellation($adapter, 'Stripe');
+        $subscriptionService->expects($this->once())
+            ->method('cancel')
+            ->with('sub_test_123')
+            ->willThrowException(new ApiErrorException('Network issue'));
+        $logger->expects($this->once())->method('error');
+
+        $model = new Model_Subscription();
+        $model->loadBean(new DummyBean());
+        $model->sid = 'sub_test_123';
+        $model->pay_gateway_id = 1;
+
+        $this->expectException(ApiErrorException::class);
+        $this->expectExceptionMessage('Network issue');
+
+        $adapter->cancelSubscription($model);
+    }
+
     public static function validPeriodProvider(): array
     {
         return [
@@ -161,5 +237,43 @@ final class Payment_Adapter_StripeTest extends BBTestCase
         $signature = hash_hmac('sha256', $signedPayload, $secret);
 
         return sprintf('t=%s,v1=%s', $timestamp, $signature);
+    }
+
+    private function mockAdapterDiForCancellation(Payment_Adapter_Stripe $adapter, string $gatewayName = 'Stripe'): array
+    {
+        $subscriptionService = $this->getMockBuilder(\Stripe\Service\SubscriptionService::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['cancel', 'update'])
+            ->getMock();
+
+        $stripeClient = $this->getMockBuilder(\Stripe\StripeClient::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods([])
+            ->getMock();
+        $stripeClient->subscriptions = $subscriptionService;
+
+        $reflection = new ReflectionClass($adapter);
+        $stripeProperty = $reflection->getProperty('stripe');
+        $stripeProperty->setAccessible(true);
+        $stripeProperty->setValue($adapter, $stripeClient);
+
+        $dbMock = $this->createMock(Box_Database::class);
+        $payGateway = new Model_PayGateway();
+        $payGateway->loadBean(new DummyBean());
+        $payGateway->gateway = $gatewayName;
+        $dbMock->method('findOne')
+            ->with('PayGateway', 'id = ?', [1])
+            ->willReturn($payGateway);
+
+        $logger = $this->getMockBuilder(Box_Log::class)
+            ->onlyMethods(['info', 'error'])
+            ->getMock();
+
+        $di = $this->getDi();
+        $di['db'] = $dbMock;
+        $di['logger'] = $logger;
+        $adapter->setDi($di);
+
+        return [$subscriptionService, $logger];
     }
 }

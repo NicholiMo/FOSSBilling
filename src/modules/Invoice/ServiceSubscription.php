@@ -53,6 +53,11 @@ class ServiceSubscription implements InjectionAwareInterface
 
     public function update(\Model_Subscription $model, array $data): bool
     {
+        $status = $data['status'] ?? $model->status;
+        if ($status === 'canceled' && $model->status !== 'canceled') {
+            $this->cancelRemoteSubscription($model);
+        }
+
         $model->status = $data['status'] ?? $model->status;
         $model->sid = $data['sid'] ?? $model->sid;
         $model->period = $data['period'] ?? $model->period;
@@ -231,8 +236,20 @@ class ServiceSubscription implements InjectionAwareInterface
 
     public function unsubscribe(\Model_Subscription $model): void
     {
-        $model->status = 'canceled';
-        $model->updated_at = date('Y-m-d H:i:s');
-        $this->di['db']->store($model);
+        $this->update($model, ['status' => 'canceled']);
+    }
+
+    private function cancelRemoteSubscription(\Model_Subscription $model): void
+    {
+        $payGateway = $this->di['db']->load('PayGateway', $model->pay_gateway_id);
+        if (!$payGateway instanceof \Model_PayGateway) {
+            throw new \FOSSBilling\Exception('Payment gateway not found for subscription');
+        }
+
+        $payGatewayService = $this->di['mod_service']('Invoice', 'PayGateway');
+        $adapter = $payGatewayService->getPaymentAdapter($payGateway);
+        if (method_exists($adapter, 'cancelSubscription')) {
+            $adapter->cancelSubscription($model);
+        }
     }
 }
