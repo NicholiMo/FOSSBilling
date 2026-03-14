@@ -90,16 +90,6 @@ class Payment_Adapter_Stripe implements FOSSBilling\InjectionAwareInterface
                         'required' => false,
                     ],
                 ],
-                'cancel_at_period_end' => [
-                    'radio', [
-                        'label' => 'When canceling subscriptions:',
-                        'required' => false,
-                        'multiOptions' => [
-                            '0' => 'Cancel immediately in Stripe',
-                            '1' => 'Cancel at current period end',
-                        ],
-                    ],
-                ],
                 'default_product_name' => [
                     'text', [
                         'label' => 'Default product name (optional):',
@@ -125,86 +115,6 @@ class Payment_Adapter_Stripe implements FOSSBilling\InjectionAwareInterface
         }
 
         return $this->getOneTimeHtml($invoiceModel);
-    }
-
-    /**
-     * Optional subscription-cancellation contract for payment adapters.
-     * Adapters supporting remote cancellation should implement this method.
-     */
-    public function cancelSubscription(\Model_Subscription $model): void
-    {
-        $sid = trim((string) ($model->sid ?? ''));
-        if ($sid === '') {
-            throw new Payment_Exception('Stripe subscription cancellation requires a non-empty subscription SID.');
-        }
-
-        $gatewayId = (int) ($model->pay_gateway_id ?? 0);
-        if ($gatewayId < 1) {
-            throw new Payment_Exception('Stripe subscription cancellation requires a valid pay_gateway_id.');
-        }
-
-        $payGateway = $this->di['db']->findOne('PayGateway', 'id = ?', [$gatewayId]);
-        if (!$payGateway instanceof \Model_PayGateway) {
-            throw new Payment_Exception('Stripe subscription cancellation requires an existing payment gateway.');
-        }
-
-        if (strcasecmp((string) ($payGateway->gateway ?? ''), 'Stripe') !== 0) {
-            throw new Payment_Exception('Subscription :sid does not use the Stripe gateway and cannot be canceled via Stripe adapter.', [':sid' => $sid]);
-        }
-
-        try {
-            if ($this->shouldCancelAtPeriodEnd()) {
-                $this->stripe->subscriptions->update($sid, ['cancel_at_period_end' => true]);
-                $this->di['logger']->info('Stripe subscription %s configured to cancel at period end.', $sid);
-
-                return;
-            }
-
-            $this->stripe->subscriptions->cancel($sid);
-        } catch (\Stripe\Exception\InvalidRequestException $e) {
-            if ($this->isStripeAlreadyCanceledException($e)) {
-                $this->di['logger']->info('Stripe subscription %s is already canceled, treating cancellation as successful.', $sid);
-
-                return;
-            }
-
-            $this->di['logger']->error('Stripe cancellation failed for subscription %s: %s', $sid, $e->getMessage());
-            throw $e;
-        } catch (\Stripe\Exception\ApiErrorException $e) {
-            $this->di['logger']->error('Stripe cancellation failed for subscription %s: %s', $sid, $e->getMessage());
-            throw $e;
-        }
-    }
-
-    private function isStripeAlreadyCanceledException(\Stripe\Exception\InvalidRequestException $exception): bool
-    {
-        $message = strtolower($exception->getMessage());
-        $stripeCode = strtolower((string) $exception->getStripeCode());
-
-        return str_contains($message, 'already canceled')
-            || str_contains($message, 'already cancelled')
-            || str_contains($message, 'canceled subscription')
-            || str_contains($message, 'cancelled subscription')
-            || $stripeCode === 'subscription_already_canceled';
-    }
-
-    private function shouldCancelAtPeriodEnd(): bool
-    {
-        $value = $this->config['cancel_at_period_end'] ?? false;
-
-        if (is_bool($value)) {
-            return $value;
-        }
-
-        if (is_int($value)) {
-            return $value === 1;
-        }
-
-        if (is_string($value)) {
-            return filter_var($value, FILTER_VALIDATE_BOOLEAN);
-        }
-
-        return false;
     }
 
     private function getOneTimeHtml(Model_Invoice $invoice): string

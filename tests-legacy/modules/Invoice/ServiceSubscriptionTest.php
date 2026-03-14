@@ -76,32 +76,12 @@ final class ServiceSubscriptionTest extends \BBTestCase
 
         $dbMock = $this->getMockBuilder('\Box_Database')
             ->getMock();
-        $dbMock->expects($this->once())
-            ->method('load')
-            ->with('PayGateway', '')
-            ->willReturn($this->createPayGatewayModel('Stripe'));
         $dbMock->expects($this->atLeastOnce())
             ->method('store');
-
-        $payGatewayAdapter = new \stdClass();
-        $payGatewayService = $this->getMockBuilder(ServicePayGateway::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods(['getPaymentAdapter'])
-            ->getMock();
-        $payGatewayService->expects($this->once())
-            ->method('getPaymentAdapter')
-            ->willReturn($payGatewayAdapter);
 
         $di = $this->getDi();
         $di['db'] = $dbMock;
         $di['logger'] = new \Box_Log();
-        $di['mod_service'] = $di->protect(function ($serviceName, $sub = '') use ($payGatewayService) {
-            if ($serviceName === 'Invoice' && $sub === 'PayGateway') {
-                return $payGatewayService;
-            }
-
-            return null;
-        });
 
         $this->service->setDi($di);
 
@@ -321,144 +301,14 @@ final class ServiceSubscriptionTest extends \BBTestCase
     {
         $subscribtionModel = new \Model_Subscription();
         $subscribtionModel->loadBean(new \DummyBean());
-        $subscribtionModel->pay_gateway_id = 10;
-
         $dbMock = $this->createMock('\Box_Database');
-        $dbMock->expects($this->once())
-            ->method('load')
-            ->with('PayGateway', 10)
-            ->willReturn($this->createPayGatewayModel('PayPal'));
         $dbMock->expects($this->atLeastOnce())
             ->method('store');
 
-        $payGatewayAdapter = new \stdClass();
-        $payGatewayService = $this->getMockBuilder(ServicePayGateway::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods(['getPaymentAdapter'])
-            ->getMock();
-        $payGatewayService->expects($this->once())
-            ->method('getPaymentAdapter')
-            ->willReturn($payGatewayAdapter);
-
         $di = $this->getDi();
         $di['db'] = $dbMock;
-        $di['logger'] = new \Box_Log();
-        $di['mod_service'] = $di->protect(function ($serviceName, $sub = '') use ($payGatewayService) {
-            if ($serviceName === 'Invoice' && $sub === 'PayGateway') {
-                return $payGatewayService;
-            }
-
-            return null;
-        });
         $this->service->setDi($di);
 
         $this->service->unsubscribe($subscribtionModel);
-    }
-
-    public function testUpdateCanceledCallsRemoteAdapterCancellation(): void
-    {
-        $subscriptionModel = new \Model_Subscription();
-        $subscriptionModel->loadBean(new \DummyBean());
-        $subscriptionModel->status = 'active';
-        $subscriptionModel->sid = 'sub_remote_123';
-        $subscriptionModel->pay_gateway_id = 5;
-
-        $dbMock = $this->createMock('\Box_Database');
-        $dbMock->expects($this->once())
-            ->method('load')
-            ->with('PayGateway', 5)
-            ->willReturn($this->createPayGatewayModel('Stripe'));
-        $dbMock->expects($this->once())
-            ->method('store')
-            ->with($subscriptionModel)
-            ->willReturn(5);
-
-        $adapter = new class {
-            public bool $called = false;
-
-            public function cancelSubscription(\Model_Subscription $model): void
-            {
-                $this->called = true;
-            }
-        };
-
-        $payGatewayService = $this->getMockBuilder(ServicePayGateway::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods(['getPaymentAdapter'])
-            ->getMock();
-        $payGatewayService->expects($this->once())
-            ->method('getPaymentAdapter')
-            ->willReturn($adapter);
-
-        $di = $this->getDi();
-        $di['db'] = $dbMock;
-        $di['logger'] = new \Box_Log();
-        $di['mod_service'] = $di->protect(function ($serviceName, $sub = '') use ($payGatewayService) {
-            if ($serviceName === 'Invoice' && $sub === 'PayGateway') {
-                return $payGatewayService;
-            }
-
-            return null;
-        });
-        $this->service->setDi($di);
-
-        $result = $this->service->update($subscriptionModel, ['status' => 'canceled']);
-
-        $this->assertTrue($result);
-        $this->assertTrue($adapter->called);
-        $this->assertEquals('canceled', $subscriptionModel->status);
-    }
-
-    public function testUpdateCanceledSkipsRemoteCancelWhenAdapterDoesNotSupportMethod(): void
-    {
-        $subscriptionModel = new \Model_Subscription();
-        $subscriptionModel->loadBean(new \DummyBean());
-        $subscriptionModel->status = 'active';
-        $subscriptionModel->pay_gateway_id = 7;
-
-        $dbMock = $this->createMock('\Box_Database');
-        $dbMock->expects($this->once())
-            ->method('load')
-            ->with('PayGateway', 7)
-            ->willReturn($this->createPayGatewayModel('PayPal'));
-        $dbMock->expects($this->once())
-            ->method('store')
-            ->with($subscriptionModel)
-            ->willReturn(7);
-
-        $payGatewayAdapter = new \stdClass();
-        $payGatewayService = $this->getMockBuilder(ServicePayGateway::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods(['getPaymentAdapter'])
-            ->getMock();
-        $payGatewayService->expects($this->once())
-            ->method('getPaymentAdapter')
-            ->willReturn($payGatewayAdapter);
-
-        $di = $this->getDi();
-        $di['db'] = $dbMock;
-        $di['logger'] = new \Box_Log();
-        $di['mod_service'] = $di->protect(function ($serviceName, $sub = '') use ($payGatewayService) {
-            if ($serviceName === 'Invoice' && $sub === 'PayGateway') {
-                return $payGatewayService;
-            }
-
-            return null;
-        });
-        $this->service->setDi($di);
-
-        $result = $this->service->update($subscriptionModel, ['status' => 'canceled']);
-
-        $this->assertTrue($result);
-        $this->assertEquals('canceled', $subscriptionModel->status);
-    }
-
-    private function createPayGatewayModel(string $gateway): \Model_PayGateway
-    {
-        $model = new \Model_PayGateway();
-        $model->loadBean(new \DummyBean());
-        $model->gateway = $gateway;
-
-        return $model;
     }
 }
